@@ -69,5 +69,5 @@ Criar em Credentials:
 
 ## Dados de teste
 
-Usar aliases Gmail para pacientes fictícios — chegam todos à tua caixa:
-`o-teu-email+paciente1@gmail.com`, `+paciente2`, etc.
+Usar aliases Gmail (`o-teu-email+paciente1@gmail.com`, `+paciente2`, etc.) para simular
+pacientes fictícios — todos chegam à mesma caixa de entrada, sem precisar de contas extra.
