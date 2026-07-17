@@ -1,0 +1,270 @@
+{
+  "name": "WF2 - Follow-up Personalizado",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "74d7e632-da19-4cc7-bf4c-13fdb15a1ab6",
+      "name": "Recebe dados do WF1",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Constrói o pedido Gemini para redigir o email de follow-up.\n// Prompt documentado em prompts/followup-email.md\nconst CALCOM_LINK = 'https://cal.com/andre-correia-1ntsbg/consulta-de-avaliacao-30-min';\n\nconst lead = $input.first().json;\n\nconst system = `És o assistente de comunicação da Clínica Vitalis, uma clínica de saúde portuguesa.\nEscreves emails de resposta a pessoas que preencheram o formulário de contacto.\nDevolves APENAS um objeto JSON válido com as chaves \"assunto\" e \"corpo\".\n\nRegras de escrita:\n- Português europeu, tratamento por \"si\" (nunca \"você\" explícito, nunca tuteares).\n- Máximo 120 palavras no corpo. Sem parágrafos longos.\n- Adapta o tom ao campo \"tom_sugerido\" recebido.\n- Estrutura em 3 parágrafos curtos, SEPARADOS por uma linha em branco (usa \\\\n\\\\n\n  no valor JSON de \"corpo\" entre cada parágrafo — nunca escrevas tudo num único\n  bloco de texto):\n  1. Cumprimento com o primeiro nome + mostrar que a mensagem foi lida (referir\n     o motivo do contacto por palavras próprias).\n  2. Convite para marcar uma consulta de avaliação, com o link de marcação.\n  3. Despedida em nome da \"Equipa da Clínica Vitalis\".\n- Se urgencia = \"alta\": referir no 2º parágrafo que há vagas nos próximos dias e\n  que a equipa dá prioridade ao caso. Nunca prometas resultados clínicos.\n\nRestrições (obrigatórias):\n- NUNCA incluas diagnósticos, conselhos médicos ou promessas de tratamento/cura.\n- NUNCA inventes preços, horários, moradas ou nomes de profissionais.\n- O único link permitido é o link de marcação fornecido.`;\n\nconst user = `Dados do lead:\nNome: ${lead.nome}\nServiço: ${lead.servico}\nUrgência: ${lead.urgencia}\nResumo do pedido: ${lead.resumo}\nTom sugerido: ${lead.tom_sugerido}\nLink de marcação: ${CALCOM_LINK}`;\n\nreturn [{\n  json: {\n    body: {\n      system_instruction: { parts: [{ text: system }] },\n      contents: [{ role: 'user', parts: [{ text: user }] }],\n      generationConfig: { responseMimeType: 'application/json', temperature: 0.7 }\n    }\n  }\n}];\n"
+      },
+      "id": "db4e205d-c0a2-419b-8d55-6de00a656468",
+      "name": "Preparar pedido Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "d88e38e6-e98e-4a0e-aa53-6ae271575ff3",
+      "name": "Chamada Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CmnDBUyZTuDSgSbC",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse defensivo do email redigido pelo Gemini.\nconst lead = $('Recebe dados do WF1').first().json;\nconst resp = $input.first().json;\n\nlet text = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\ntext = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();\n\nlet email;\ntry {\n  email = JSON.parse(text);\n} catch (e) {\n  throw new Error('Resposta do Gemini não é JSON válido: ' + text);\n}\n\nif (!email.assunto || !email.corpo) {\n  throw new Error('Resposta sem assunto/corpo: ' + text);\n}\n\nreturn [{\n  json: {\n    destinatario: lead.email,\n    nome: lead.nome,\n    assunto: email.assunto,\n    corpo: email.corpo\n  }\n}];"
+      },
+      "id": "49d3e78e-c647-48e8-9448-35691e563b95",
+      "name": "Interpretar email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.destinatario }}",
+        "subject": "={{ $json.assunto }}",
+        "emailType": "text",
+        "message": "={{ $json.corpo }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "17c7fd34-5198-4742-9dae-c3d0adad8e55",
+      "name": "Enviar Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        0
+      ],
+      "webhookId": "09113cea-e2a1-42f5-b8c1-ce73e24207d1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara a linha de log (só corre se o envio Gmail teve sucesso).\nconst email = $('Interpretar email').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'followup',\n    destinatario: email.destinatario,\n    assunto: email.assunto\n  }\n}];"
+      },
+      "id": "a6426bee-a92f-48ff-96e0-459596cbbab2",
+      "name": "Preparar log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1612030211,
+          "mode": "list",
+          "cachedResultName": "emails",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1612030211"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "destinatario",
+              "displayName": "destinatario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "576d4726-f670-4e5f-bcf1-383407efd902",
+      "name": "Log no Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1328,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recebe dados do WF1": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido Gemini": {
+      "main": [
+        [
+          {
+            "node": "Chamada Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamada Gemini": {
+      "main": [
+        [
+          {
+            "node": "Interpretar email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar email": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Gmail": {
+      "main": [
+        [
+          {
+            "node": "Preparar log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar log": {
+      "main": [
+        [
+          {
+            "node": "Log no Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "9439d5aa-c147-4db1-b917-2962caf53cd5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c2dac941ddd6f2426507ce318eca3a2ab8be26600042df99abf795127f43cd2"
+  },
+  "nodeGroups": [],
+  "id": "1kPhxndGRLbdb1oS",
+  "tags": []
+}

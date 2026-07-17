@@ -1,0 +1,359 @@
+{
+  "name": "WF1 - Lead Intake e Qualificação",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Clínica Vitalis — Pedido de Contacto",
+        "formDescription": "Deixe-nos os seus dados e entraremos em contacto consigo.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nome",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Telefone"
+            },
+            {
+              "fieldLabel": "Serviço de interesse",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Fisioterapia"
+                  },
+                  {
+                    "option": "Nutrição"
+                  },
+                  {
+                    "option": "Psicologia"
+                  },
+                  {
+                    "option": "Avaliação Geral"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Mensagem",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0173db7f-f079-4bbb-a484-8057b29feb55",
+      "name": "Recebe Lead",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "8259c010-59fb-4ea1-8f0e-e46675d5b8fd"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Constrói o pedido para a API do Gemini a partir dos dados do formulário.\n// Prompt documentado em prompts/lead-qualification.md\nconst form = $input.first().json;\n\nconst system = `És um assistente de triagem de uma clínica de saúde portuguesa. Recebes dados de um\nformulário de contacto e devolves APENAS um objeto JSON válido, sem markdown nem\nqualquer texto adicional.\n\nSchema do output:\n{\n  \"servico\": \"fisioterapia | nutricao | psicologia | avaliacao_geral\",\n  \"urgencia\": \"alta | media | baixa\",\n  \"resumo\": \"1-2 frases sobre o que o lead procura\",\n  \"tom_sugerido\": \"empatico | pratico | tranquilizador\"\n}\n\nRegras de classificação:\n- \"servico\": usa o valor do dropdown, exceto se a mensagem livre indicar claramente\n  outro serviço — nesse caso usa o da mensagem.\n- \"urgencia\":\n  - \"alta\" — dor aguda, agravamento recente, palavras como \"urgente\", \"não aguento\",\n    sofrimento emocional evidente.\n  - \"media\" — problema persistente mas estável, quer resolver \"em breve\".\n  - \"baixa\" — pedido de informação, curiosidade, prevenção.\n- \"resumo\": 1-2 frases, em português, factual, sem diagnósticos.\n- \"tom_sugerido\": \"tranquilizador\" para urgência alta ou tema sensível (psicologia),\n  \"empatico\" para queixas de saúde em geral, \"pratico\" para pedidos de informação.\n\nRestrições:\n- NUNCA faças diagnósticos médicos nem sugiras tratamentos.\n- Se a mensagem estiver vazia ou for impercetível, classifica urgencia como \"baixa\"\n  e resume apenas o serviço escolhido no dropdown.\n- Responde SEMPRE com JSON válido no schema indicado.`;\n\nconst user = `Dados do formulário:\nNome: ${form['Nome']}\nServiço selecionado: ${form['Serviço de interesse']}\nMensagem: ${form['Mensagem'] || '(vazia)'}`;\n\nreturn [{\n  json: {\n    body: {\n      system_instruction: { parts: [{ text: system }] },\n      contents: [{ role: 'user', parts: [{ text: user }] }],\n      generationConfig: { responseMimeType: 'application/json', temperature: 0.2 }\n    }\n  }\n}];"
+      },
+      "id": "981b1548-18b9-4ddb-b2d2-778285490f1d",
+      "name": "Preparar pedido Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "8dfad229-007f-46d7-8761-e12bbe9ede9b",
+      "name": "Chamada Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "XPzAwDLurdloroY0",
+          "name": "HubSpot Service Key account"
+        },
+        "httpHeaderAuth": {
+          "id": "CmnDBUyZTuDSgSbC",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Faz o parse defensivo da resposta do Gemini e junta com os dados do formulário.\nconst form = $('Recebe Lead').first().json;\nconst resp = $input.first().json;\n\nlet text = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\ntext = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();\n\nlet cls;\ntry {\n  cls = JSON.parse(text);\n} catch (e) {\n  throw new Error('Resposta do Gemini não é JSON válido: ' + text);\n}\n\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    nome: form['Nome'],\n    email: form['Email'],\n    telefone: form['Telefone'] || '',\n    servico: cls.servico,\n    urgencia: cls.urgencia,\n    resumo: cls.resumo,\n    tom_sugerido: cls.tom_sugerido\n  }\n}];"
+      },
+      "id": "f9ab59ca-0ddc-4841-bfe9-5c11385ded79",
+      "name": "Interpretar classificação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "firstName": "={{ $json.nome }}"
+        },
+        "options": {}
+      },
+      "id": "120a0cad-94b5-4751-9ba5-a546f45966f6",
+      "name": "Upsert contacto HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1104,
+        0
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "XPzAwDLurdloroY0",
+          "name": "HubSpot Service Key account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "servico",
+              "displayName": "servico",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "urgencia",
+              "displayName": "urgencia",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resumo",
+              "displayName": "resumo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tom_sugerido",
+              "displayName": "tom_sugerido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1fa1b37b-f4bb-4c7e-a4c9-3feca0b6a899",
+      "name": "Log no Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1104,
+        176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "1kPhxndGRLbdb1oS",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/1kPhxndGRLbdb1oS",
+          "cachedResultName": "WF2 - Follow-up Personalizado"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        336
+      ],
+      "id": "f413aa2d-f998-43cc-8577-6f24e092b5d3",
+      "name": "Call 'WF2 - Follow-up Personalizado'"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Recebe Lead": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido Gemini": {
+      "main": [
+        [
+          {
+            "node": "Chamada Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamada Gemini": {
+      "main": [
+        [
+          {
+            "node": "Interpretar classificação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar classificação": {
+      "main": [
+        [
+          {
+            "node": "Upsert contacto HubSpot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log no Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call 'WF2 - Follow-up Personalizado'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "649e7e51-848e-43be-a071-1b023d97d8c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c2dac941ddd6f2426507ce318eca3a2ab8be26600042df99abf795127f43cd2"
+  },
+  "nodeGroups": [],
+  "id": "f2WcJbsg29P5oDTM",
+  "tags": []
+}
