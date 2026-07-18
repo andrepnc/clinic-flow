@@ -1,0 +1,56 @@
+{
+  "name": "WF0 - Alertas de Erro",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f0a1b2c3-0001-4000-8000-000000000001",
+      "name": "Erro em workflow",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formata o alerta com o essencial para diagnosticar sem abrir o n8n.\n// >>> EDITAR: substitui pelo email real de alertas (ex.: o teu alias +alertas) <<<\nconst DESTINATARIO = 'alertas@example.com';\n\nconst e = $input.first().json;\nconst wf = e.workflow || {};\nconst ex = e.execution || {};\nconst erro = ex.error || {};\n\nconst agora = new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');\n\nconst linhas = [\n  'Ocorreu um erro num workflow do Clinic Flow.',\n  '',\n  'Workflow: ' + (wf.name || 'desconhecido'),\n  'Nó: ' + (ex.lastNodeExecuted || erro.node?.name || 'desconhecido'),\n  'Erro: ' + (erro.message || 'sem mensagem'),\n  'Hora: ' + agora,\n  'Execução: ' + (ex.url || ('id ' + (ex.id || 'n/a')))\n];\n\nreturn [{\n  json: {\n    destinatario: DESTINATARIO,\n    assunto: '[Clinic Flow] Erro no workflow: ' + (wf.name || 'desconhecido'),\n    corpo: linhas.join('\\n')\n  }\n}];"
+      },
+      "id": "f0a1b2c3-0002-4000-8000-000000000002",
+      "name": "Preparar alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.destinatario }}",
+        "subject": "={{ $json.assunto }}",
+        "emailType": "text",
+        "message": "={{ $json.corpo }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f0a1b2c3-0003-4000-8000-000000000003",
+      "name": "Enviar alerta",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [448, 0],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Erro em workflow": {
+      "main": [[{ "node": "Preparar alerta", "type": "main", "index": 0 }]]
+    },
+    "Preparar alerta": {
+      "main": [[{ "node": "Enviar alerta", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
