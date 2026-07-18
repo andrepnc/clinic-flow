@@ -1,0 +1,486 @@
+{
+  "name": "WF4 - Pós-Consulta e Feedback",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10
+            }
+          ]
+        }
+      },
+      "id": "a9ebb399-7a4b-4d19-9a1c-fe01d1fc61a2",
+      "name": "Scan diário",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1536,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "options": {}
+      },
+      "id": "990f3529-f967-466f-83f5-055ae1086e10",
+      "name": "Ler bookings",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1328,
+        80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Seleciona consultas já realizadas, confirmadas e ainda sem follow-up.\nconst now = Date.now();\nconst out = [];\n\nfor (const item of $input.all()) {\n  const r = item.json;\n  if ((r.status || '') !== 'confirmada') continue;\n  if (r.followup_enviado) continue;\n  if (!r.data_consulta) continue;\n\n  const start = Date.parse(r.data_consulta);\n  if (Number.isNaN(start)) continue;\n  if (start >= now) continue; // ainda não aconteceu\n\n  const fmt = new Intl.DateTimeFormat('pt-PT', {\n    dateStyle: 'long', timeZone: 'Europe/Lisbon'\n  });\n  out.push({\n    json: {\n      row_number: r.row_number,\n      nome: r.nome,\n      email: r.email,\n      data_consulta_formatada: fmt.format(new Date(start))\n    }\n  });\n}\n\nreturn out;"
+      },
+      "id": "244fed3e-64ab-44fa-a636-76ac50f50dea",
+      "name": "Filtrar pós-consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1104,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Constrói o pedido Gemini do email pós-consulta (um por item).\n// Prompt documentado em prompts/post-appointment.md\n// >>> EDITAR: substitui pelo link real do questionário de feedback <<<\nconst FEEDBACK_LINK = 'https://forms.gle/1Ygopx1KGPqWu6JJ7';\n\nconst system = `És o assistente de comunicação da Clínica Vitalis. Escreves o email enviado no dia\nseguinte a uma consulta. Devolves APENAS um objeto JSON válido com \"assunto\" e \"corpo\".\n\nRegras:\n- Português europeu, tratamento por \"si\". Máximo 80 palavras no corpo.\n- Estrutura em 3 parágrafos curtos, separados por linha em branco (usa \\\\n\\\\n no valor\n  JSON de \"corpo\"): agradecer a visita (referir o serviço) → pedir 1 minuto para\n  responder ao questionário de feedback, com o link → nota de que a equipa fica\n  disponível + despedida da \"Equipa da Clínica Vitalis\".\n- Tom: caloroso, simples, sem exageros.\n\nRestrições:\n- NUNCA perguntes por detalhes clínicos nem menciones o conteúdo da consulta.\n- O único link permitido é o link de feedback fornecido.\n- Não ofereças descontos nem promoções.`;\n\nreturn $input.all().map((item) => {\n  const b = item.json;\n  const user = `Nome: ${b.nome}\\nServiço: consulta de avaliação\\nData da consulta: ${b.data_consulta_formatada}\\nLink de feedback: ${FEEDBACK_LINK}`;\n  return {\n    json: {\n      body: {\n        system_instruction: { parts: [{ text: system }] },\n        contents: [{ role: 'user', parts: [{ text: user }] }],\n        generationConfig: { responseMimeType: 'application/json', temperature: 0.6 }\n      }\n    }\n  };\n});"
+      },
+      "id": "c919127f-4fb7-4fc1-94ea-1e79cd011401",
+      "name": "Preparar pedido Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "9aa463aa-db24-4459-af19-b48b26b53b5f",
+      "name": "Chamada Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -656,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CmnDBUyZTuDSgSbC",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse defensivo, emparelhado por índice com os bookings filtrados.\nconst bookings = $('Filtrar pós-consulta').all();\n\nreturn $input.all().map((item, i) => {\n  const resp = item.json;\n  let text = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\n  text = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();\n\n  let email;\n  try {\n    email = JSON.parse(text);\n  } catch (e) {\n    throw new Error('Resposta do Gemini não é JSON válido: ' + text);\n  }\n  if (!email.assunto || !email.corpo) {\n    throw new Error('Resposta sem assunto/corpo: ' + text);\n  }\n\n  const b = bookings[i].json;\n  return {\n    json: {\n      row_number: b.row_number,\n      destinatario: b.email,\n      nome: b.nome,\n      assunto: email.assunto,\n      corpo: email.corpo\n    }\n  };\n});"
+      },
+      "id": "b4e5e63f-8337-4347-8bac-28a762f92f9c",
+      "name": "Interpretar email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.destinatario }}",
+        "subject": "={{ $json.assunto }}",
+        "emailType": "text",
+        "message": "={{ $json.corpo }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "fe4f952f-5fa4-4cfd-ae75-98e1851db3aa",
+      "name": "Enviar Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        80
+      ],
+      "webhookId": "54ea155d-dd4b-488a-8d58-e73d31bd5ec5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Interpretar email').item.json.row_number }}",
+            "followup_enviado": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data_consulta",
+              "displayName": "data_consulta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lembrete_enviado",
+              "displayName": "lembrete_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "followup_enviado",
+              "displayName": "followup_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data_consulta_formatada",
+              "displayName": "data_consulta_formatada",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8cb51f69-f562-4a57-9fb1-42c6804860d3",
+      "name": "Marcar followup enviado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Linha de log dos emails pós-consulta (só corre após envio com sucesso).\n// Usa o nó de parse porque o output do Gmail é a resposta da API, não o lead.\nreturn $('Interpretar email').all().map((item) => ({\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'posconsulta',\n    destinatario: item.json.destinatario,\n    assunto: item.json.assunto\n  }\n}));"
+      },
+      "id": "93092d73-bee1-4e7e-83a7-6a57a3c95b39",
+      "name": "Preparar log pós-consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1612030211,
+          "mode": "list",
+          "cachedResultName": "emails",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1612030211"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "destinatario",
+              "displayName": "destinatario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1f854a6c-c7b5-43bb-b686-12c847bd71b1",
+      "name": "Log no Sheets (emails)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        160
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Scan diário": {
+      "main": [
+        [
+          {
+            "node": "Ler bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler bookings": {
+      "main": [
+        [
+          {
+            "node": "Filtrar pós-consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar pós-consulta": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido Gemini": {
+      "main": [
+        [
+          {
+            "node": "Chamada Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamada Gemini": {
+      "main": [
+        [
+          {
+            "node": "Interpretar email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar email": {
+      "main": [
+        [
+          {
+            "node": "Enviar Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Gmail": {
+      "main": [
+        [
+          {
+            "node": "Marcar followup enviado",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar log pós-consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar log pós-consulta": {
+      "main": [
+        [
+          {
+            "node": "Log no Sheets (emails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ffd3b90f-e873-4797-8e18-38f64eccd5de",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c2dac941ddd6f2426507ce318eca3a2ab8be26600042df99abf795127f43cd2"
+  },
+  "nodeGroups": [],
+  "id": "pX1N2ZAMPQkw72O4",
+  "tags": []
+}
