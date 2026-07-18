@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Interpreta o payload booking.created do Cal.com e normaliza para o formato do log.\nconst body = $input.first().json.body ?? $input.first().json;\nconst p = body.payload ?? body;\nconst attendee = (p.attendees && p.attendees[0]) || {};\n\nconst start = p.startTime || '';\nlet dataFormatada = '';\nif (start) {\n  const fmt = new Intl.DateTimeFormat('pt-PT', {\n    dateStyle: 'full', timeStyle: 'short', timeZone: 'Europe/Lisbon'\n  });\n  dataFormatada = fmt.format(new Date(start));\n}\n\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    nome: attendee.name || '',\n    email: attendee.email || '',\n    data_consulta: start,\n    status: 'confirmada',\n    lembrete_enviado: '',\n    followup_enviado: '',\n    data_consulta_formatada: dataFormatada\n  }\n}];"
+        "jsCode": "// Interpreta o payload booking.created do Cal.com e normaliza para o formato do log.\nconst body = $input.first().json.body ?? $input.first().json;\nconst p = body.payload ?? body;\nconst attendee = (p.attendees && p.attendees[0]) || {};\n\nconst start = p.startTime || '';\nlet dataFormatada = '';\nif (start) {\n  const fmt = new Intl.DateTimeFormat('pt-PT', {\n    dateStyle: 'full', timeStyle: 'short', timeZone: 'Europe/Lisbon'\n  });\n  dataFormatada = fmt.format(new Date(start));\n}\n\nreturn [{\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    nome: attendee.name || '',\n    email: attendee.email || '',\n    data_consulta: start,\n    status: 'confirmada',\n    lembrete_enviado: '',\n    followup_enviado: '',\n    data_consulta_formatada: dataFormatada\n  }\n}];"
       },
       "id": "139a9fa2-c0a1-482b-9af1-61299f4bf8e2",
       "name": "Interpretar booking",
@@ -188,7 +188,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Linha de log do email de confirmação (só corre após envio com sucesso).\nconst b = $('Interpretar booking').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'confirmacao',\n    destinatario: b.email,\n    assunto: 'Consulta confirmada - Clínica Vitalis'\n  }\n}];"
+        "jsCode": "// Linha de log do email de confirmação (só corre após envio com sucesso).\nconst b = $('Interpretar booking').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    tipo: 'confirmacao',\n    destinatario: b.email,\n    assunto: 'Consulta confirmada - Clínica Vitalis'\n  }\n}];"
       },
       "id": "0210cbb6-d695-481f-be25-6978006a907d",
       "name": "Preparar log confirmação",
@@ -390,7 +390,7 @@
           "mappingMode": "defineBelow",
           "value": {
             "row_number": "={{ $('Filtrar lembretes').item.json.row_number }}\n",
-            "lembrete_enviado": "={{ new Date().toISOString() }}"
+            "lembrete_enviado": "={{ new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '') }}"
           },
           "matchingColumns": [
             "row_number"
@@ -493,7 +493,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Linha de log dos emails de lembrete (só corre após envio com sucesso).\n// Usa a lista filtrada porque o output do nó Gmail é a resposta da API, não o lead.\nreturn $('Filtrar lembretes').all().map((item) => ({\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'lembrete',\n    destinatario: item.json.email,\n    assunto: 'Lembrete da sua consulta - Clínica Vitalis'\n  }\n}));\n"
+        "jsCode": "// Linha de log dos emails de lembrete (só corre após envio com sucesso).\n// Usa a lista filtrada porque o output do nó Gmail é a resposta da API, não o lead.\nreturn $('Filtrar lembretes').all().map((item) => ({\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    tipo: 'lembrete',\n    destinatario: item.json.email,\n    assunto: 'Lembrete da sua consulta - Clínica Vitalis'\n  }\n}));\n"
       },
       "id": "b2600b16-ef42-4f9a-a55b-e955472e5d55",
       "name": "Preparar log lembrete",

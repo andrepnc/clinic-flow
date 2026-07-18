@@ -170,7 +170,7 @@
           "mappingMode": "defineBelow",
           "value": {
             "row_number": "={{ $('Interpretar email').item.json.row_number }}",
-            "followup_enviado": "={{ new Date().toISOString() }}"
+            "followup_enviado": "={{ new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '') }}"
           },
           "matchingColumns": [
             "row_number"
@@ -282,7 +282,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Linha de log dos emails pós-consulta (só corre após envio com sucesso).\n// Usa o nó de parse porque o output do Gmail é a resposta da API, não o lead.\nreturn $('Interpretar email').all().map((item) => ({\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'posconsulta',\n    destinatario: item.json.destinatario,\n    assunto: item.json.assunto\n  }\n}));"
+        "jsCode": "// Linha de log dos emails pós-consulta (só corre após envio com sucesso).\n// Usa o nó de parse porque o output do Gmail é a resposta da API, não o lead.\nreturn $('Interpretar email').all().map((item) => ({\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    tipo: 'posconsulta',\n    destinatario: item.json.destinatario,\n    assunto: item.json.assunto\n  }\n}));"
       },
       "id": "93092d73-bee1-4e7e-83a7-6a57a3c95b39",
       "name": "Preparar log pós-consulta",

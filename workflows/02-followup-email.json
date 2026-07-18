@@ -95,7 +95,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepara a linha de log (só corre se o envio Gmail teve sucesso).\nconst email = $('Interpretar email').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'followup',\n    destinatario: email.destinatario,\n    assunto: email.assunto\n  }\n}];"
+        "jsCode": "// Prepara a linha de log (só corre se o envio Gmail teve sucesso).\nconst email = $('Interpretar email').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    tipo: 'followup',\n    destinatario: email.destinatario,\n    assunto: email.assunto\n  }\n}];"
       },
       "id": "a6426bee-a92f-48ff-96e0-459596cbbab2",
       "name": "Preparar log",
