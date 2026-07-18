@@ -3,7 +3,7 @@
 > 🎥 **Vídeo demo:** _(disponível assim que todos os workflows estiverem concluídos)_
 
 Clínicas perdem pacientes porque o follow-up de leads é lento e manual. O **Clinic Flow**
-automatiza o funil completo: um lead preenche o formulário e, sem intervenção humana,
+automatiza o fluxo completo: um lead preenche o formulário e, sem intervenção humana,
 é qualificado por IA, registado no CRM, recebe um email personalizado com link de
 marcação, confirmação e lembrete de consulta, follow-up pós-consulta — e a gerência
 recebe um relatório semanal de KPIs redigido por IA.

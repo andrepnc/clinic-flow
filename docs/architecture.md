@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Funil automatizado lead→consulta para uma clínica fictícia ("Clínica Vitalis"),
+Fluxo de automação lead→consulta para uma clínica fictícia ("Clínica Vitalis"),
 orquestrado em n8n com IA (Gemini) nos pontos de decisão e redação.
 
 ```mermaid
