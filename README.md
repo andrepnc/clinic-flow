@@ -6,8 +6,9 @@ automatiza o fluxo completo: um lead preenche o formulário e, sem intervenção
 marcação, confirmação e lembrete de consulta, follow-up pós-consulta — e a gerência
 recebe um relatório semanal de KPIs redigido por IA.
 
-> 🎥 Existe um vídeo demo do sistema completo a correr ao vivo — partilhado no contexto
-> de candidaturas; disponível mediante pedido.
+> 🎥 **[Vídeo demo (7 min)](https://youtu.be/Q-YLWHCk1XI)** — o sistema completo a
+> correr ao vivo: formulário → qualificação IA → email → marcação → lembrete →
+> pós-consulta → relatório de KPIs.
 
 ## Estado do projeto
 
