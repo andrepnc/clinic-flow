@@ -1,0 +1,359 @@
+{
+  "name": "WF5 - Relatório Semanal de KPIs",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "54887266-ed28-413c-9412-0cd528a26b50",
+      "name": "Scan semanal",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "d9186152-e16a-45c6-b1c7-3eedbbeb91bb",
+      "name": "Ler leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        208,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "options": {}
+      },
+      "id": "dbf92d89-29c9-4f0f-a2d9-2734258decf7",
+      "name": "Ler bookings",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        0
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrega os KPIs da semana a partir das abas leads e bookings.\n// Decisão de arquitetura: os números são calculados aqui (exatos e auditáveis);\n// o LLM só redige o texto. Ver prompts/weekly-report.md\nconst MS_DIA = 24 * 60 * 60 * 1000;\nconst agora = Date.now();\nconst inicioSemana = agora - 7 * MS_DIA;\nconst inicioAnterior = agora - 14 * MS_DIA;\n\n// Aceita o formato legível \"dd/mm/aaaa hh:mm\" (atual) e ISO (linhas antigas).\nfunction parseData(s) {\n  if (!s) return NaN;\n  const m = String(s).match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})[ ,]+(\\d{2}):(\\d{2})/);\n  if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime();\n  return Date.parse(s);\n}\n\nfunction noPeriodo(lista, inicio, fim) {\n  return lista.filter((r) => {\n    const t = parseData(r.timestamp);\n    return !Number.isNaN(t) && t >= inicio && t < fim;\n  });\n}\n\nfunction contarPor(lista, campo) {\n  const out = {};\n  for (const r of lista) {\n    const k = r[campo] || 'desconhecido';\n    out[k] = (out[k] || 0) + 1;\n  }\n  return out;\n}\n\n// alwaysOutputData pode devolver um item vazio quando a aba está vazia — filtrar.\nconst leads = $('Ler leads').all().map((i) => i.json).filter((r) => r.email);\nconst bookings = $('Ler bookings').all().map((i) => i.json).filter((r) => r.email);\n\nconst leadsSemana = noPeriodo(leads, inicioSemana, agora);\nconst leadsAnterior = noPeriodo(leads, inicioAnterior, inicioSemana);\nconst bookingsSemana = noPeriodo(bookings, inicioSemana, agora);\nconst bookingsAnterior = noPeriodo(bookings, inicioAnterior, inicioSemana);\n\nconst fmt = new Intl.DateTimeFormat('pt-PT', {\n  day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Lisbon'\n});\nconst periodo = fmt.format(new Date(inicioSemana)) + ' - ' + fmt.format(new Date(agora));\n\nconst taxa = leadsSemana.length\n  ? ((bookingsSemana.length / leadsSemana.length) * 100).toFixed(1) + '%'\n  : 'n/a';\n\nreturn [{\n  json: {\n    kpis: {\n      periodo,\n      total_leads: leadsSemana.length,\n      leads_por_servico: contarPor(leadsSemana, 'servico'),\n      leads_por_urgencia: contarPor(leadsSemana, 'urgencia'),\n      consultas_marcadas: bookingsSemana.length,\n      taxa_conversao: taxa,\n      semana_anterior: {\n        total_leads: leadsAnterior.length,\n        consultas_marcadas: bookingsAnterior.length\n      }\n    }\n  }\n}];"
+      },
+      "id": "563f3877-93c8-4517-b555-411e658f6197",
+      "name": "Calcular KPIs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Constrói o pedido Gemini do relatório semanal.\n// Prompt documentado em prompts/weekly-report.md\nconst system = `És analista de marketing da Clínica Vitalis. Escreves o resumo semanal para a\ngerência com base em KPIs já calculados. Escreves em português europeu.\n\nRegras:\n- Usa APENAS os números fornecidos. Nunca inventes, estimes ou recalcules valores.\n- Estrutura: 1 parágrafo com a leitura geral da semana (incluindo comparação com a\n  semana anterior) → lista de bullets com os KPIs principais → 1 parágrafo final\n  com uma recomendação prática baseada nos dados (ex.: reforçar resposta a leads\n  de urgência alta, investir no serviço com mais procura).\n- Nos bullets usa hífen (-) no início de cada linha, nunca asteriscos.\n- Máximo 180 palavras. Tom profissional e direto, sem jargão.\n- Responde só com o texto do email, sem assunto nem saudação inicial.`;\n\nconst kpis = $input.first().json.kpis;\nconst user = 'KPIs da semana:\\n' + JSON.stringify(kpis, null, 2);\n\nreturn [{\n  json: {\n    periodo: kpis.periodo,\n    body: {\n      system_instruction: { parts: [{ text: system }] },\n      contents: [{ role: 'user', parts: [{ text: user }] }],\n      generationConfig: { temperature: 0.4 }\n    }\n  }\n}];\n"
+      },
+      "id": "9975399d-f11b-433f-baf3-cd24f5ceae60",
+      "name": "Preparar pedido Gemini",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "025d25f0-c238-469d-9547-f6c79e504425",
+      "name": "Chamada Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1088,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CmnDBUyZTuDSgSbC",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai o texto do relatório (resposta em texto livre, não JSON).\n// >>> EDITAR: substitui pelo email real da \"gerência\" (ex.: o teu alias +gerencia) <<<\nconst DESTINATARIO = 'gerencia@example.com';\n\nconst resp = $input.first().json;\nlet text = resp.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\ntext = text.trim();\nif (!text) {\n  throw new Error('Resposta vazia do Gemini');\n}\n\nconst periodo = $('Preparar pedido Gemini').first().json.periodo;\n\nreturn [{\n  json: {\n    destinatario: DESTINATARIO,\n    assunto: 'Relatório semanal de KPIs - Clínica Vitalis (' + periodo + ')',\n    corpo: text\n  }\n}];"
+      },
+      "id": "fa0d1096-f636-471c-be13-9f6095db7b16",
+      "name": "Interpretar relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.destinatario }}",
+        "subject": "={{ $json.assunto }}",
+        "emailType": "text",
+        "message": "={{ $json.corpo }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d48f01c8-365a-4605-ad79-02b43fd3a20b",
+      "name": "Enviar relatório",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1536,
+        0
+      ],
+      "webhookId": "6291376b-b96c-4850-9530-d07f38bedd22",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Linha de log do relatório semanal (só corre após envio com sucesso).\nconst r = $('Interpretar relatório').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),\n    tipo: 'relatorio',\n    destinatario: r.destinatario,\n    assunto: r.assunto\n  }\n}];"
+      },
+      "id": "d09c9841-df79-4b98-b196-b07658499926",
+      "name": "Preparar log relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1612030211,
+          "mode": "list",
+          "cachedResultName": "emails",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1612030211"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "b5a8eb8b-b4b9-411f-bb5f-9baf568cf66a",
+      "name": "Log no Sheets (emails)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Scan semanal": {
+      "main": [
+        [
+          {
+            "node": "Ler leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler leads": {
+      "main": [
+        [
+          {
+            "node": "Ler bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler bookings": {
+      "main": [
+        [
+          {
+            "node": "Calcular KPIs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular KPIs": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido Gemini": {
+      "main": [
+        [
+          {
+            "node": "Chamada Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamada Gemini": {
+      "main": [
+        [
+          {
+            "node": "Interpretar relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar relatório": {
+      "main": [
+        [
+          {
+            "node": "Enviar relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar relatório": {
+      "main": [
+        [
+          {
+            "node": "Preparar log relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar log relatório": {
+      "main": [
+        [
+          {
+            "node": "Log no Sheets (emails)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "704458c8-7426-4372-83e7-3e1ef6c3c414",
+  "meta": {
+    "instanceId": "1c2dac941ddd6f2426507ce318eca3a2ab8be26600042df99abf795127f43cd2"
+  },
+  "nodeGroups": [],
+  "id": "vH2ArxGE9xWrdt99",
+  "tags": []
+}
