@@ -8,15 +8,11 @@ automatiza o funil completo: um lead preenche o formulário e, sem intervenção
 marcação, confirmação e lembrete de consulta, follow-up pós-consulta — e a gerência
 recebe um relatório semanal de KPIs redigido por IA.
 
-## Estado do projeto (17 Jul 2026)
+## Estado do projeto (18 Jul 2026)
 
-Em desenvolvimento ativo. Concluídos e testados end-to-end até agora:
-
-- ✅ **WF1 — Lead Intake e Qualificação**: formulário → classificação Gemini → HubSpot + Sheets
-- ✅ **WF2 — Follow-up Personalizado**: email redigido por IA e enviado via Gmail
-
-Em falta (WF3–WF5, ver secção Arquitetura abaixo) — previsto para conclusão nas
-próximas 24h. O histórico de commits reflete o progresso real, sessão a sessão.
+**Os 5 workflows estão concluídos, testados individualmente e publicados.**
+Em falta: tratamento de erros global, teste end-to-end final e vídeo demo.
+O histórico de commits reflete o progresso real, sessão a sessão.
 
 ## Stack
 
@@ -37,9 +33,9 @@ completo e as decisões de design.
 
 1. ✅ **Lead Intake** — formulário → Gemini classifica serviço/urgência (JSON estrito) → HubSpot + log
 2. ✅ **Follow-up** — Gemini redige email personalizado ao lead com link de marcação
-3. ⏳ **Booking** — webhook do Cal.com → confirmação + lembrete 24h antes
-4. ⏳ **Pós-consulta** — agradecimento e pedido de feedback no dia seguinte
-5. ⏳ **Relatório semanal** — KPIs calculados em n8n, resumo executivo redigido por Gemini
+3. ✅ **Booking** — webhook do Cal.com → confirmação + lembrete 24h antes (scan horário idempotente)
+4. ✅ **Pós-consulta** — agradecimento e pedido de feedback no dia seguinte
+5. ✅ **Relatório semanal** — KPIs calculados em n8n, resumo executivo redigido por Gemini
 
 ## Prompt Engineering
 
@@ -55,4 +51,4 @@ e notas de design. Os workflows exportados estão em [workflows/](workflows/).
 
 ---
 
-_Projeto em construção — última atualização 17 Jul 2026._
+_Projeto em construção — última atualização 18 Jul 2026._

@@ -33,7 +33,9 @@ Regras:
   semana anterior) → lista de bullets com os KPIs principais → 1 parágrafo final
   com uma recomendação prática baseada nos dados (ex.: reforçar resposta a leads
   de urgência alta, investir no serviço com mais procura).
+- Nos bullets usa hífen (-) no início de cada linha, nunca asteriscos.
 - Máximo 180 palavras. Tom profissional e direto, sem jargão.
+- Responde só com o texto do email, sem assunto nem saudação inicial.
 ```
 
 ## Prompt (User)
@@ -47,4 +49,12 @@ KPIs da semana:
 - Decisão de arquitetura: os cálculos são feitos em nós Code/Aggregate do n8n, não
   pelo LLM — números têm de ser exatos e auditáveis; o modelo só redige.
 
-_(Atualizar esta secção com iterações reais durante os testes.)_
+## Iterações reais (testes de 18 Jul 2026)
+- Primeira versão devolvia os bullets com asteriscos markdown (`*   `) num email
+  de texto simples. A regra explícita "usa hífen (-), nunca asteriscos" resolveu
+  à primeira tentativa.
+- Com `semana_anterior` a zeros (primeira semana de atividade), o modelo interpretou
+  corretamente como "início da atividade" em vez de inventar variações percentuais —
+  validação de que fornecer números crus + regra "nunca recalcules" é suficiente.
+- Verificação numérica: todos os valores do email correspondem exatamente aos KPIs
+  calculados pelo n8n; nenhum número inventado ou recalculado.
