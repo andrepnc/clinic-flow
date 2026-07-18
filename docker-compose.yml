@@ -16,3 +16,6 @@ services:
 
 volumes:
   n8n_data:
+    # Reutiliza o volume global "n8n_data" (sem prefixo do projeto compose),
+    # onde ficam os workflows e credenciais da instância.
+    name: n8n_data
