@@ -1,0 +1,721 @@
+{
+  "name": "WF3 - Booking, Confirmação e Lembrete",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "calcom-booking",
+        "options": {}
+      },
+      "id": "4678501d-0821-44a7-9234-249c9e9b6180",
+      "name": "Webhook Cal.com",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        864
+      ],
+      "webhookId": "clinic-flow-calcom-booking"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Interpreta o payload booking.created do Cal.com e normaliza para o formato do log.\nconst body = $input.first().json.body ?? $input.first().json;\nconst p = body.payload ?? body;\nconst attendee = (p.attendees && p.attendees[0]) || {};\n\nconst start = p.startTime || '';\nlet dataFormatada = '';\nif (start) {\n  const fmt = new Intl.DateTimeFormat('pt-PT', {\n    dateStyle: 'full', timeStyle: 'short', timeZone: 'Europe/Lisbon'\n  });\n  dataFormatada = fmt.format(new Date(start));\n}\n\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    nome: attendee.name || '',\n    email: attendee.email || '',\n    data_consulta: start,\n    status: 'confirmada',\n    lembrete_enviado: '',\n    followup_enviado: '',\n    data_consulta_formatada: dataFormatada\n  }\n}];"
+      },
+      "id": "139a9fa2-c0a1-482b-9af1-61299f4bf8e2",
+      "name": "Interpretar booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "firstName": "={{ $json.nome }}"
+        },
+        "options": {}
+      },
+      "id": "a637e079-9c78-4a5d-bc26-bad0516cf513",
+      "name": "Atualizar contacto HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        -208,
+        704
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "XPzAwDLurdloroY0",
+          "name": "HubSpot Service Key account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data_consulta",
+              "displayName": "data_consulta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lembrete_enviado",
+              "displayName": "lembrete_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "followup_enviado",
+              "displayName": "followup_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "dc0bbae9-c0d5-4ba5-97d7-9c81c0951253",
+      "name": "Log no Sheets (bookings)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -208,
+        864
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Consulta confirmada - Clínica Vitalis",
+        "emailType": "text",
+        "message": "={{ 'Estimado(a) ' + $json.nome + ',\\n\\nA sua consulta de avaliação na Clínica Vitalis está confirmada para ' + $json.data_consulta_formatada + '.\\n\\nSe precisar de reagendar ou cancelar, pode fazê-lo através do link presente no email de confirmação da marcação.\\n\\nAté breve,\\nEquipa da Clínica Vitalis' }}\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e1318eaf-8d8a-4bcf-9166-f7a131c0d6dc",
+      "name": "Enviar confirmação",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -208,
+        1024
+      ],
+      "webhookId": "d86c1a8c-32bd-4b2d-95d1-0c1023ff11ab",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Linha de log do email de confirmação (só corre após envio com sucesso).\nconst b = $('Interpretar booking').first().json;\nreturn [{\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'confirmacao',\n    destinatario: b.email,\n    assunto: 'Consulta confirmada - Clínica Vitalis'\n  }\n}];"
+      },
+      "id": "0210cbb6-d695-481f-be25-6978006a907d",
+      "name": "Preparar log confirmação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1612030211,
+          "mode": "list",
+          "cachedResultName": "emails",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1612030211"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "destinatario",
+              "displayName": "destinatario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e7945e90-241a-47af-98c0-badbe969aa20",
+      "name": "Log no Sheets (emails conf.)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        1024
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "acc42431-d16b-4e6e-8eb1-3f319707b809",
+      "name": "Scan horário",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -672,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "options": {}
+      },
+      "id": "06f97341-9ee5-431c-b7cd-77b3301cafa0",
+      "name": "Ler bookings",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -448,
+        1344
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Seleciona bookings confirmados a menos de 24h da consulta e ainda sem lembrete.\nconst now = Date.now();\nconst JANELA_MS = 24 * 60 * 60 * 1000;\nconst out = [];\n\nfor (const item of $input.all()) {\n  const r = item.json;\n  if ((r.status || '') !== 'confirmada') continue;\n  if (r.lembrete_enviado) continue;\n  if (!r.data_consulta) continue;\n\n  const start = Date.parse(r.data_consulta);\n  if (Number.isNaN(start)) continue;\n\n  const falta = start - now;\n  if (falta > 0 && falta <= JANELA_MS) {\n    const fmt = new Intl.DateTimeFormat('pt-PT', {\n      dateStyle: 'full', timeStyle: 'short', timeZone: 'Europe/Lisbon'\n    });\n    out.push({\n      json: {\n        row_number: r.row_number,\n        nome: r.nome,\n        email: r.email,\n        data_consulta_formatada: fmt.format(new Date(start))\n      }\n    });\n  }\n}\n\nreturn out;"
+      },
+      "id": "f77ceedf-de6d-4775-9d8d-0b4bf9d20e3f",
+      "name": "Filtrar lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Lembrete da sua consulta - Clínica Vitalis",
+        "emailType": "text",
+        "message": "={{ 'Estimado(a) ' + $json.nome + ',\\n\\nLembramos que tem uma consulta de avaliação marcada na Clínica Vitalis para ' + $json.data_consulta_formatada + '.\\n\\nSe não puder comparecer, agradecemos que reagende ou cancele com antecedência.\\n\\nAté breve,\\nEquipa da Clínica Vitalis' }}\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "83c6d398-1dd0-4a29-bbe2-29ad03bd239c",
+      "name": "Enviar lembrete",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -16,
+        1344
+      ],
+      "webhookId": "3ba58399-21cd-4f7a-99d2-8686e7611f65",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WL7Sfta0TZxbIAAs",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1401037619,
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1401037619"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Filtrar lembretes').item.json.row_number }}\n",
+            "lembrete_enviado": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data_consulta",
+              "displayName": "data_consulta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lembrete_enviado",
+              "displayName": "lembrete_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "followup_enviado",
+              "displayName": "followup_enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "94291233-ac36-48d4-bab1-23b0af2eb950",
+      "name": "Marcar lembrete enviado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        1264
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Linha de log dos emails de lembrete (só corre após envio com sucesso).\n// Usa a lista filtrada porque o output do nó Gmail é a resposta da API, não o lead.\nreturn $('Filtrar lembretes').all().map((item) => ({\n  json: {\n    timestamp: new Date().toISOString(),\n    tipo: 'lembrete',\n    destinatario: item.json.email,\n    assunto: 'Lembrete da sua consulta - Clínica Vitalis'\n  }\n}));\n"
+      },
+      "id": "b2600b16-ef42-4f9a-a55b-e955472e5d55",
+      "name": "Preparar log lembrete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1424
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI",
+          "mode": "list",
+          "cachedResultName": "clinic-flow-log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1612030211,
+          "mode": "list",
+          "cachedResultName": "emails",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1K0ZO1-CGVGuQwG_jsghTnsFviV92lhCuLb58IilWBYI/edit#gid=1612030211"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tipo",
+              "displayName": "tipo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "destinatario",
+              "displayName": "destinatario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "assunto",
+              "displayName": "assunto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7f42591e-c175-4ebf-b14f-58f118f95238",
+      "name": "Log no Sheets (emails lemb.)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        1424
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ePDc1ZfwLiIEf5sR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Cal.com": {
+      "main": [
+        [
+          {
+            "node": "Interpretar booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar booking": {
+      "main": [
+        [
+          {
+            "node": "Atualizar contacto HubSpot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log no Sheets (bookings)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Enviar confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar confirmação": {
+      "main": [
+        [
+          {
+            "node": "Preparar log confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar log confirmação": {
+      "main": [
+        [
+          {
+            "node": "Log no Sheets (emails conf.)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan horário": {
+      "main": [
+        [
+          {
+            "node": "Ler bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler bookings": {
+      "main": [
+        [
+          {
+            "node": "Filtrar lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar lembretes": {
+      "main": [
+        [
+          {
+            "node": "Enviar lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar lembrete": {
+      "main": [
+        [
+          {
+            "node": "Marcar lembrete enviado",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar log lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar log lembrete": {
+      "main": [
+        [
+          {
+            "node": "Log no Sheets (emails lemb.)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1
+  },
+  "versionId": "066f7d8d-576b-4e3a-bfd2-ac4c6a723af0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c2dac941ddd6f2426507ce318eca3a2ab8be26600042df99abf795127f43cd2"
+  },
+  "nodeGroups": [],
+  "id": "gbIhYFW4vY3HF7Qp",
+  "tags": []
+}
